@@ -290,6 +290,25 @@ export const openExternal = DesktopIpc.makeIpcMethod({
   }),
 });
 
+/** The main process downloads outside the renderer's CORS and CSP limits. */
+export const downloadUrl = DesktopIpc.makeIpcMethod({
+  channel: IpcChannels.DOWNLOAD_URL_CHANNEL,
+  payload: Schema.Struct({ url: Schema.String, fileName: Schema.String }),
+  result: Schema.Void,
+  handler: ({ url, fileName }, event) =>
+    Effect.sync(() => {
+      const contents = event && Electron.webContents.fromId(event.sender.id);
+      if (!contents || !/^(https?|data):/i.test(url)) return;
+      // downloadURL cannot suggest a name, and asset URLs end in an opaque id.
+      if (/\.\w+$/.test(fileName)) {
+        contents.session.once("will-download", (_event, item) => {
+          item.setSaveDialogOptions({ defaultPath: fileName });
+        });
+      }
+      contents.downloadURL(url);
+    }),
+});
+
 export const openSystemSettings = DesktopIpc.makeIpcMethod({
   channel: IpcChannels.OPEN_SYSTEM_SETTINGS_CHANNEL,
   payload: SystemSettingsPaneSchema,
